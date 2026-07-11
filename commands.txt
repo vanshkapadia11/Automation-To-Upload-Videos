@@ -1,0 +1,502 @@
+# YouTube Auto-Uploader — cURL Reference
+
+All commands assume:
+- **Base URL:** `http://localhost:5000`
+- **API Key:** `your_api_key_here` (set via `AUTO_API_KEY` env var; omit the `-H "X-API-Key"` header entirely if running in dev mode with no key configured)
+
+---
+
+## 🩺 Health Check
+> No auth required. Safe for uptime monitors.
+
+```bash
+curl -X GET http://localhost:5000/auto/health
+```
+
+**Expected response:**
+```json
+{
+  "status": "ok",
+  "ts": "2024-01-01T00:00:00Z",
+  "accounts_count": 2,
+  "dedup_count": 5
+}
+```
+
+---
+
+## 🔐 OAuth — Authorize an Account
+> Open these in a **browser** (not curl) — they redirect to Google's consent screen.
+
+```bash
+# Authorize your first/main account
+open "http://localhost:5000/auto/auth?account=main"
+
+# Authorize a second channel
+open "http://localhost:5000/auto/auth?account=gaming"
+
+# Authorize a third channel
+open "http://localhost:5000/auto/auth?account=hindi"
+```
+
+> After completing the Google OAuth flow, you'll be redirected back and see a `✅` success JSON. The token is saved automatically.
+
+---
+
+## 👥 Account Management
+
+### List all authorized accounts
+```bash
+curl -X GET http://localhost:5000/auto/accounts \
+  -H "X-API-Key: your_api_key_here"
+```
+
+### Delete / revoke an account
+```bash
+curl -X DELETE http://localhost:5000/auto/accounts/gaming \
+  -H "X-API-Key: your_api_key_here"
+```
+
+---
+
+## 📊 Stats
+
+```bash
+curl -X GET http://localhost:5000/auto/stats \
+  -H "X-API-Key: your_api_key_here"
+```
+
+**Expected response:**
+```json
+{
+  "total_runs": 10,
+  "total_uploads_succeeded": 28,
+  "total_uploads_failed": 2,
+  "total_skipped_dedup": 3,
+  "last_run_at": "2024-01-01T12:00:00Z",
+  "last_run_title": "Some Video Title",
+  "last_run_source_url": "https://youtube.com/watch?v=abc123",
+  "last_run_source_channel": "https://youtube.com/@MrBeast",
+  "dedup_count": 5,
+  "accounts_count": 3
+}
+```
+
+---
+
+## 🔍 Pick Best Video (no download/upload)
+
+### Single channel — best scoring Short
+```bash
+curl -X POST http://localhost:5000/auto/pick \
+  -H "X-API-Key: your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "channel_url": "https://www.youtube.com/@MrBeast"
+  }'
+```
+
+### Single channel — random Short
+```bash
+curl -X POST http://localhost:5000/auto/pick \
+  -H "X-API-Key: your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "channel_url":    "https://www.youtube.com/@MrBeast",
+    "random_pick":    true,
+    "max_candidates": 20
+  }'
+```
+
+### Multi-channel — pick from a pool of channels
+```bash
+curl -X POST http://localhost:5000/auto/pick \
+  -H "X-API-Key: your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "channel_urls": [
+      "https://www.youtube.com/@MrBeast",
+      "https://www.youtube.com/@PewDiePie",
+      "https://www.youtube.com/@Markiplier"
+    ],
+    "channel_mode":   "random",
+    "random_pick":    false,
+    "max_candidates": 30
+  }'
+```
+
+### Multi-channel — pick best Long-form video
+```bash
+curl -X POST http://localhost:5000/auto/pick \
+  -H "X-API-Key: your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "channel_urls": [
+      "https://www.youtube.com/@MrBeast",
+      "https://www.youtube.com/@veritasium"
+    ],
+    "channel_mode": "weighted",
+    "video_type":   "longform",
+    "random_pick":  false
+  }'
+```
+
+**Expected response (long-form pick):**
+```json
+{
+  "success": true,
+  "channel_selected": "https://www.youtube.com/@MrBeast",
+  "channel_pool": ["https://www.youtube.com/@MrBeast", "https://www.youtube.com/@veritasium"],
+  "channel_mode": "weighted",
+  "video_type": "longform",
+  "is_short": false,
+  "id": "abc123xyz",
+  "title": "I Spent 50 Hours Buried Alive",
+  "url": "https://youtube.com/watch?v=abc123xyz",
+  "views": 120000000,
+  "likes": 3200000,
+  "duration": 1245,
+  "upload_date": "20240101",
+  "thumbnail": "https://i.ytimg.com/vi/abc123xyz/maxresdefault.jpg",
+  "description": "First 500 chars of description...",
+  "tags": ["mrbeast", "challenge", "viral"],
+  "elapsed_ms": 4200
+}
+```
+
+---
+
+## ▶️ Run Full Pipeline — All Accounts
+
+Downloads the video **once** and uploads to **all accounts in parallel**.
+
+### Minimal — single channel, Shorts (original behavior)
+```bash
+curl -X POST http://localhost:5000/auto/run \
+  -H "X-API-Key: your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "channel_url": "https://www.youtube.com/@MrBeast",
+    "account_ids": ["main", "gaming", "hindi"]
+  }'
+```
+
+### Multi-channel Shorts — random channel selection
+```bash
+curl -X POST http://localhost:5000/auto/run \
+  -H "X-API-Key: your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "channel_urls": [
+      "https://www.youtube.com/@MrBeast",
+      "https://www.youtube.com/@PewDiePie",
+      "https://www.youtube.com/@Markiplier"
+    ],
+    "channel_mode": "random",
+    "account_ids":  ["main", "gaming", "hindi"],
+    "privacy":      "private",
+    "video_type":   "shorts"
+  }'
+```
+
+### Multi-channel Shorts — round-robin (cycles through channels in order)
+```bash
+curl -X POST http://localhost:5000/auto/run \
+  -H "X-API-Key: your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "channel_urls": [
+      "https://www.youtube.com/@MrBeast",
+      "https://www.youtube.com/@PewDiePie",
+      "https://www.youtube.com/@Markiplier"
+    ],
+    "channel_mode": "round_robin",
+    "account_ids":  ["main", "gaming"],
+    "privacy":      "private",
+    "video_type":   "shorts"
+  }'
+```
+
+### Multi-channel Shorts — weighted (first channel gets highest priority)
+```bash
+curl -X POST http://localhost:5000/auto/run \
+  -H "X-API-Key: your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "channel_urls": [
+      "https://www.youtube.com/@MrBeast",
+      "https://www.youtube.com/@PewDiePie",
+      "https://www.youtube.com/@Markiplier"
+    ],
+    "channel_mode":   "weighted",
+    "account_ids":    ["main", "gaming", "hindi"],
+    "privacy":        "private",
+    "max_candidates": 50,
+    "random_pick":    false,
+    "video_type":     "shorts"
+  }'
+```
+
+---
+
+## 🎬 Long-form Video Pipeline (Full Copy Mode)
+
+> Copies **everything** from the source video: title, description, tags, category,
+> thumbnail (downloaded + re-uploaded), language, and `made_for_kids` flag.
+
+### Single channel — long-form full copy, all accounts
+```bash
+curl -X POST http://localhost:5000/auto/run \
+  -H "X-API-Key: your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "channel_url": "https://www.youtube.com/@MrBeast",
+    "account_ids": ["main", "gaming"],
+    "privacy":     "private",
+    "video_type":  "longform"
+  }'
+```
+
+### Multi-channel — long-form, random channel pick
+```bash
+curl -X POST http://localhost:5000/auto/run \
+  -H "X-API-Key: your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "channel_urls": [
+      "https://www.youtube.com/@MrBeast",
+      "https://www.youtube.com/@veritasium",
+      "https://www.youtube.com/@kurzgesagt"
+    ],
+    "channel_mode": "random",
+    "account_ids":  ["main", "gaming", "hindi"],
+    "privacy":      "private",
+    "video_type":   "longform"
+  }'
+```
+
+### Multi-channel — long-form, round-robin, random pick within channel
+```bash
+curl -X POST http://localhost:5000/auto/run \
+  -H "X-API-Key: your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "channel_urls": [
+      "https://www.youtube.com/@MrBeast",
+      "https://www.youtube.com/@veritasium",
+      "https://www.youtube.com/@kurzgesagt"
+    ],
+    "channel_mode":   "round_robin",
+    "account_ids":    ["main", "gaming"],
+    "privacy":        "private",
+    "video_type":     "longform",
+    "random_pick":    true,
+    "max_candidates": 30
+  }'
+```
+
+### Multi-channel — long-form, dry run (download only, no upload)
+```bash
+curl -X POST http://localhost:5000/auto/run \
+  -H "X-API-Key: your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "channel_urls": [
+      "https://www.youtube.com/@MrBeast",
+      "https://www.youtube.com/@veritasium"
+    ],
+    "channel_mode": "random",
+    "account_ids":  ["main"],
+    "video_type":   "longform",
+    "dry_run":      true
+  }'
+```
+
+**Expected response (long-form upload):**
+```json
+{
+  "success": true,
+  "source_url": "https://youtube.com/watch?v=abc123xyz",
+  "source_channel": "https://youtube.com/@MrBeast",
+  "channel_pool": ["https://youtube.com/@MrBeast", "https://youtube.com/@veritasium"],
+  "channel_selected": "https://youtube.com/@MrBeast",
+  "channel_mode": "random",
+  "title": "I Spent 50 Hours Buried Alive",
+  "privacy": "private",
+  "size_mb": 842.3,
+  "video_type": "longform",
+  "is_short": false,
+  "thumbnail_copied": true,
+  "random_pick": false,
+  "dry_run": false,
+  "candidate_attempt": 1,
+  "accounts_succeeded": ["main", "gaming"],
+  "accounts_failed": [],
+  "results": {
+    "main":   { "success": true, "uploaded_id": "xyz111", "youtube_url": "https://youtube.com/watch?v=xyz111" },
+    "gaming": { "success": true, "uploaded_id": "xyz222", "youtube_url": "https://youtube.com/watch?v=xyz222" }
+  },
+  "elapsed_ms": 94200
+}
+```
+
+---
+
+## ▶️ Run Pipeline — Single Account
+
+### Single channel Short
+```bash
+curl -X POST http://localhost:5000/auto/run_one \
+  -H "X-API-Key: your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "channel_url": "https://www.youtube.com/@MrBeast",
+    "account_id":  "gaming"
+  }'
+```
+
+### Multi-channel Short — single account
+```bash
+curl -X POST http://localhost:5000/auto/run_one \
+  -H "X-API-Key: your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "channel_urls": [
+      "https://www.youtube.com/@MrBeast",
+      "https://www.youtube.com/@PewDiePie",
+      "https://www.youtube.com/@Markiplier"
+    ],
+    "channel_mode": "random",
+    "account_id":   "gaming",
+    "privacy":      "private",
+    "video_type":   "shorts"
+  }'
+```
+
+### Multi-channel Long-form — single account, full copy
+```bash
+curl -X POST http://localhost:5000/auto/run_one \
+  -H "X-API-Key: your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "channel_urls": [
+      "https://www.youtube.com/@MrBeast",
+      "https://www.youtube.com/@veritasium",
+      "https://www.youtube.com/@kurzgesagt"
+    ],
+    "channel_mode": "round_robin",
+    "account_id":   "main",
+    "privacy":      "private",
+    "video_type":   "longform",
+    "random_pick":  false
+  }'
+```
+
+### With all options
+```bash
+curl -X POST http://localhost:5000/auto/run_one \
+  -H "X-API-Key: your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "channel_urls": [
+      "https://www.youtube.com/@MrBeast",
+      "https://www.youtube.com/@veritasium"
+    ],
+    "channel_mode":   "weighted",
+    "account_id":     "gaming",
+    "privacy":        "unlisted",
+    "max_candidates": 30,
+    "random_pick":    true,
+    "dry_run":        false,
+    "video_type":     "longform"
+  }'
+```
+
+---
+
+## 🗑️ Dedup Management
+
+### Clear dedup log (re-allow previously uploaded videos)
+```bash
+curl -X DELETE http://localhost:5000/auto/dedup \
+  -H "X-API-Key: your_api_key_here"
+```
+
+---
+
+## 🔑 Alternative Auth Methods
+
+The API key can be passed three ways — pick whichever is most convenient:
+
+```bash
+# 1. Header (recommended)
+curl -X GET http://localhost:5000/auto/stats \
+  -H "X-API-Key: your_api_key_here"
+
+# 2. Query parameter
+curl -X GET "http://localhost:5000/auto/stats?api_key=your_api_key_here"
+
+# 3. JSON body field
+curl -X POST http://localhost:5000/auto/run \
+  -H "Content-Type: application/json" \
+  -d '{
+    "api_key":      "your_api_key_here",
+    "channel_urls": ["https://www.youtube.com/@MrBeast"],
+    "account_ids":  ["main"]
+  }'
+```
+
+---
+
+## 📋 Quick Reference Table
+
+| Method   | Endpoint                    | Auth | Description                          |
+|----------|-----------------------------|------|--------------------------------------|
+| `GET`    | `/auto/health`              | ❌   | Liveness probe                       |
+| `GET`    | `/auto/auth?account=<name>` | ❌   | Start OAuth2 for an account (browser)|
+| `GET`    | `/auto/auth/callback`       | ❌   | OAuth2 callback (auto-handled)       |
+| `GET`    | `/auto/accounts`            | ✅   | List all authorized accounts         |
+| `DELETE` | `/auto/accounts/<id>`       | ✅   | Remove an account's token            |
+| `GET`    | `/auto/stats`               | ✅   | Upload counts and last-run info      |
+| `DELETE` | `/auto/dedup`               | ✅   | Wipe dedup log                       |
+| `POST`   | `/auto/pick`                | ✅   | Pick best video (no upload)          |
+| `POST`   | `/auto/run`                 | ✅   | Full pipeline — all accounts         |
+| `POST`   | `/auto/run_one`             | ✅   | Full pipeline — single account       |
+
+---
+
+## 🎛️ video_type Values
+
+| Value      | Behavior |
+|------------|----------|
+| `shorts`   | Only considers videos ≤ 60s. Appends `#Shorts` to title. Default. |
+| `longform` | Only considers videos > 60s. Copies title, description, tags, category, thumbnail, language, made_for_kids exactly. |
+| `auto`     | No duration filter. Detects type per video and applies the right behavior automatically. |
+
+## 🌐 channel_mode Values
+
+| Value         | Behavior |
+|---------------|----------|
+| `random`      | Picks one channel at random each run. Best for anti-fingerprinting. Default. |
+| `weighted`    | First channel in the list has the highest probability, descending. |
+| `round_robin` | Cycles through the list in order. Resets on server restart. |
+
+---
+
+## ⚠️ Common Error Responses
+
+| Status | Meaning |
+|--------|---------|
+| `400`  | Missing required field (`channel_url`/`channel_urls`, `account_ids`, etc.) |
+| `401`  | Invalid or missing API key |
+| `404`  | Account token not found (for DELETE `/accounts/<id>`) |
+| `429`  | Rate limit exceeded (default: 20 calls/60s per IP) |
+| `500`  | Internal error (check server logs for JSON error detail) |
+
+---
+
+## 📝 Notes
+
+- `channel_url` (single string) and `channel_urls` (list) are both accepted on every endpoint — fully backwards compatible.
+- Long-form thumbnail upload requires the destination channel to be **verified on YouTube** (phone-verified + 1000 subs). If not verified, the upload still succeeds but the thumbnail is skipped with a warning in logs.
+- `round_robin` state is in-memory and resets on server restart. Use `weighted` or `random` for stateless deployments.

@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: vidiflow-media-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: API_SECRET
+        generateValue: true
+      - key: YOUTUBE_COOKIES
+        sync: false
+      - key: INSTAGRAM_COOKIES
+        sync: false
+    healthCheckPath: /

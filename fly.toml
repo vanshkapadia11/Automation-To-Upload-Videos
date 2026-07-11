@@ -1,0 +1,20 @@
+app = "api-for-youtube-and-instagram-downloader"          # change this to whatever you want
+primary_region = "bom"         # Mumbai — closest to India
+
+[build]
+
+[http_service]
+  internal_port = 5000
+  force_https = true
+  auto_stop_machines = false   # no spin-down = no cold starts
+  auto_start_machines = true
+  min_machines_running = 1
+
+[env]
+  PORT = "5000"
+  # YOUTUBE_COOKIES = "..."    # set secrets via CLI, not here
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

@@ -1,0 +1,22 @@
+youtube_cookies.txt
+instagram_cookies.txt
+*_cookies.txt
+.env
+__pycache__/
+*.pyc
+*.pyo
+tokens/
+cookies.txt
+credentials.json
+something.txt
+client_secret_1.json
+client_secret.json
+previous_code.txt
+*.pickle
+# important_things.txt
+secret_keys.txt
+rate_limit.json
+stats.json
+uploaded_ids.json
+settings.json
+uploaded_ids.json
